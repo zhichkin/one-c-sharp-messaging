@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <AssemblyName>OneCSharp.Messaging</AssemblyName>
+    <RootNamespace>OneCSharp.Messaging</RootNamespace>
+  </PropertyGroup>
+
+</Project>
