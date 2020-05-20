@@ -7,31 +7,28 @@ namespace tests
     public class TestMessagingService
     {
         private readonly string serverName = "ZHICHKIN";
-        private readonly string databaseName = "DataExchangeNode";
 
         [TestMethod]
-        public void TestServiceBrokerSetup()
+        public void CreatePublicEndPoint()
         {
             MessagingService messaging = new MessagingService();
             messaging.UseServer(serverName);
-            messaging.CreateDatabase(databaseName);
-            Assert.AreEqual(messaging.Database.Name, databaseName);
+            messaging.CreatePublicEndpoint("ServerBrokerEndpoint", 1234);
         }
         [TestMethod]
-        public void TestCreateQueue()
+        public void SetupServiceBroker()
         {
             MessagingService messaging = new MessagingService();
             messaging.UseServer(serverName);
-            messaging.CreateDatabase(databaseName);
-            messaging.CreateQueue("Test");
+            messaging.SetupServiceBroker();
         }
         [TestMethod]
-        public void TestCreateEndPoint()
+        public void CreateQueue()
         {
             MessagingService messaging = new MessagingService();
             messaging.UseServer(serverName);
-            messaging.UseDatabase("master");
-            messaging.CreatePublicEndPoint("ServerBrokerEndpoint1234", 1234);
+            messaging.SetupServiceBroker();
+            messaging.CreateQueue("test");
         }
     }
 }

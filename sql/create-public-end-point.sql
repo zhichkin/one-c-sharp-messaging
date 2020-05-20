@@ -1,11 +1,14 @@
 SELECT * FROM sys.symmetric_keys;
 SELECT * FROM sys.certificates;
 SELECT * FROM sys.service_broker_endpoints;
+SELECT * FROM sys.tcp_endpoints AS i
+INNER JOIN sys.service_broker_endpoints AS e
+ON i.endpoint_id = e.endpoint_id;
 
 USE [master];
-GO
 
-IF NOT EXISTS(SELECT 1 FROM sys.certificates WHERE name='ServiceBrokerTransportCertificate')
+
+IF NOT EXISTS(SELECT 1 FROM sys.certificates WHERE name='ServiceBrokerTransportAuthenticationCertificate')
 BEGIN
 	IF NOT EXISTS(SELECT 1 FROM sys.symmetric_keys WHERE name = '##MS_DatabaseMasterKey##')
 	BEGIN
@@ -32,5 +35,6 @@ BEGIN
 	(
 		AUTHENTICATION = CERTIFICATE ServiceBrokerTransportAuthenticationCertificate
 	)
+	GRANT CONNECT ON ENDPOINT::ServerBrokerEndpoint1234 TO [PUBLIC];
 END
 GO
