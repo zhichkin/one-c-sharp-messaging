@@ -1,5 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 using System;
+using System.Collections.Generic;
 using System.Data;
 
 namespace OneCSharp.Messaging
@@ -76,50 +77,70 @@ namespace OneCSharp.Messaging
         }
         public void CreateQueue(string name)
         {
+            if (string.IsNullOrWhiteSpace(CurrentServer)) throw new InvalidOperationException(ERROR_SERVER_IS_NOT_DEFINED);
+
             Guid brokerId = SqlScripts.ExecuteScalar<Guid>(ConnectionString, SqlScripts.SelectServiceBrokerIdentifierScript());
             SqlScripts.ExecuteScript(ConnectionString, SqlScripts.CreateServiceQueueScript(brokerId, name));
         }
-        public void CreateChannel(string name, string sourceQueue, string targetQueue)
+        public string GetUserCertificateBinaryData()
         {
-            string sql = "";
-            //BEGIN DIALOG @handle
-            //FROM SERVICE [local service name]
-            //TO SERVICE 'remote service name', 'remote service_broker_guid'
-            //ON CONTRACT [DEFAULT]
-            //WITH ENCRYPTION = OFF;
+            if (string.IsNullOrWhiteSpace(CurrentServer)) throw new InvalidOperationException(ERROR_SERVER_IS_NOT_DEFINED);
 
-            //CREATE ROUTE [route name]
-            //  WITH
-            //    SERVICE_NAME = 'remote service name',
-            //    ADDRESS = 'TCP://targetserver:4022';
+            return SqlScripts.ExecuteScalar<string>(ConnectionString, SqlScripts.SelectCertificateBinaryDataScript());
+        }
+        public void CreateRemoteUser(string targetQueueFullName, string certificateBinaryData)
+        {
+            if (string.IsNullOrWhiteSpace(CurrentServer)) throw new InvalidOperationException(ERROR_SERVER_IS_NOT_DEFINED);
 
-            //CREATE REMOTE SERVICE BINDING [binding name]
-            //  TO SERVICE 'remote service name'
-            //  WITH
-            //    USER = [remote user name],
-            //    ANONYMOUS = ON;
+            Guid targetBroker = SqlScripts.GetBrokerId(targetQueueFullName);
+            SqlScripts.ExecuteScript(ConnectionString, SqlScripts.CreateRemoteUserScript(targetBroker, certificateBinaryData));
+        }
+        public void CreateRoute(string name, string sourceQueueFullName, string targetAddress, string targetQueueFullName)
+        {
+            if (string.IsNullOrWhiteSpace(CurrentServer)) throw new InvalidOperationException(ERROR_SERVER_IS_NOT_DEFINED);
+
+            Guid sourceBroker = SqlScripts.GetBrokerId(sourceQueueFullName);
+            Guid targetBroker = SqlScripts.GetBrokerId(targetQueueFullName);
+            string sourceQueueName = SqlScripts.GetQueueName(sourceQueueFullName);
+            string targetQueueName = SqlScripts.GetQueueName(targetQueueFullName);
+            
+            string script = SqlScripts.CreateRouteScript(name, sourceBroker, sourceQueueName, targetAddress, targetBroker, targetQueueName);
+            SqlScripts.ExecuteScript(ConnectionString, script);
         }
 
-
-
-        public void CreateTopic()
+        public void SendMessage(string routeName, string payload)
         {
+            if (string.IsNullOrWhiteSpace(CurrentServer)) throw new InvalidOperationException(ERROR_SERVER_IS_NOT_DEFINED);
 
+            Guid handle = SqlScripts.ExecuteScalar<Guid>(ConnectionString, SqlScripts.SelectDialogHandleScript(routeName));
+            string sql = SqlScripts.SendMessageToChannelScript();
+            Dictionary<string, object> parameters = new Dictionary<string, object>();
+            parameters.Add("handle", handle);
+            parameters.Add("message", payload);
+            SqlScripts.ExecuteScript(ConnectionString, sql, parameters);
         }
-
-
-
-        public void SendMessage(string channelName, string payload)
+        private string AlterDatabaseConnectionString()
         {
-            string sql = "SEND ON CONVERSATION @handle MESSAGE TYPE [DEFAULT] (@message);";
+            SqlConnectionStringBuilder csb = new SqlConnectionStringBuilder(ConnectionString);
+            csb.InitialCatalog = SqlScripts.SERVICE_BROKER_DATABASE;
+            return csb.ToString();
         }
-        public string ReceiveMessage(string queueName)
+        public string ReceiveMessage(string queueFullName)
         {
-            return null;
+            if (string.IsNullOrWhiteSpace(CurrentServer)) throw new InvalidOperationException(ERROR_SERVER_IS_NOT_DEFINED);
+
+            string connectionString = AlterDatabaseConnectionString();
+            string message = SqlScripts.ExecuteScalar<string>(connectionString, SqlScripts.SimpleReceiveMessageScript(queueFullName));
+            return message;
         }
         public void Commit()
         {
-            
+            // TODO: commit active transaction begun by ReceiveMessage method ...
+        }
+        
+        public void CreateTopic()
+        {
+            // TODO
         }
     }
 }
