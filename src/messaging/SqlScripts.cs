@@ -98,7 +98,7 @@ namespace OneCSharp.Messaging
             } /* end of the limited scope */
         }
 
-        private static string CreateQueueName(Guid brokerId, string name)
+        internal static string CreateQueueName(Guid brokerId, string name)
         {
             return $"{brokerId}/Queue/{name}";
         }
@@ -392,6 +392,37 @@ namespace OneCSharp.Messaging
             script.AppendLine("\tIF (@@TRANCOUNT > 0) ROLLBACK TRANSACTION;");
             script.AppendLine("\tTHROW;");
             script.AppendLine("END CATCH");
+            return script.ToString();
+        }
+        internal static string ReceiveOneMessageScript(string queueFullName, int timeoutMilliseconds)
+        {
+            StringBuilder script = new StringBuilder();
+            script.AppendLine("DECLARE @handle uniqueidentifier;");
+            script.AppendLine("DECLARE @message_type nvarchar(256);");
+            script.AppendLine("DECLARE @message_body NVARCHAR(max);");
+            script.AppendLine($"WAITFOR (RECEIVE TOP (1)");
+            script.AppendLine("\t@handle = conversation_handle,");
+            script.AppendLine("\t@message_type = message_type_name,");
+            script.AppendLine("\t@message_body = CAST(message_body AS nvarchar(max))");
+            script.AppendLine($"FROM [{queueFullName}]");
+            script.AppendLine($"), TIMEOUT {timeoutMilliseconds};"); // 1000 milliseconds = 1 second
+            script.AppendLine("IF (@message_type = N'http://schemas.microsoft.com/SQL/ServiceBroker/Error' OR");
+            script.AppendLine("\t\t@message_type = N'http://schemas.microsoft.com/SQL/ServiceBroker/EndDialog')");
+            script.AppendLine("BEGIN");
+            script.AppendLine("\tEND CONVERSATION @handle;");
+            script.AppendLine("END");
+            script.AppendLine("SELECT @message_body;");
+            return script.ToString();
+        }
+        internal static string ReceiveListOfMessagesScript(string queueFullName, int numberOfMessages, int timeoutMilliseconds)
+        {
+            StringBuilder script = new StringBuilder();
+            script.AppendLine($"WAITFOR (RECEIVE TOP ({numberOfMessages})");
+            script.AppendLine("\tconversation_handle AS [dialog_handle],");
+            script.AppendLine("\tmessage_type_name AS [message_type],");
+            script.AppendLine("\tCAST(message_body AS nvarchar(max)) AS [message_body]");
+            script.AppendLine($"FROM [{queueFullName}]");
+            script.AppendLine($"), TIMEOUT {timeoutMilliseconds};"); // 1000 milliseconds = 1 second
             return script.ToString();
         }
     }

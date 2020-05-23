@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OneCSharp.Messaging;
 using System;
+using System.Collections.Generic;
 
 namespace tests
 {
@@ -123,6 +124,55 @@ namespace tests
             //{
             //    messaging.Commit();
             //}
+        }
+        [TestMethod]
+        public void ReceiveMessageOnTargetQueueWithMessageConsumer()
+        {
+            //string targetQueueFullName = @"7d027278-6734-48c3-814e-180f0892dd00/Queue/TargetQueue";
+
+            MessagingService messaging = new MessagingService();
+            messaging.UseServer(targetServerName);
+
+            using (var consumer = messaging.CreateMessageConsumer("TargetQueue"))
+            {
+                string message = consumer.Receive();
+                if (string.IsNullOrEmpty(message))
+                {
+                    Console.WriteLine("message is empty");
+                }
+                else
+                {
+                    Assert.AreEqual("test message from source to target", message);
+                    Console.WriteLine($"message: {message}");
+                }
+                consumer.Commit();
+            }
+        }
+        [TestMethod]
+        public void ReceiveListOfMessagesOnTargetQueue()
+        {
+            //string targetQueueFullName = @"7d027278-6734-48c3-814e-180f0892dd00/Queue/TargetQueue";
+
+            MessagingService messaging = new MessagingService();
+            messaging.UseServer(targetServerName);
+
+            using (var consumer = messaging.CreateMessageConsumer("TargetQueue"))
+            {
+                IList<string> messages = consumer.Receive(3, 5000);
+                foreach (string message in messages)
+                {
+                    if (string.IsNullOrEmpty(message))
+                    {
+                        Console.WriteLine("message is empty");
+                    }
+                    else
+                    {
+                        Assert.AreEqual("test message from source to target", message);
+                        Console.WriteLine($"message: {message}");
+                    }
+                }
+                consumer.Commit();
+            }
         }
     }
 }

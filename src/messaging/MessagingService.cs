@@ -125,6 +125,14 @@ namespace OneCSharp.Messaging
             csb.InitialCatalog = SqlScripts.SERVICE_BROKER_DATABASE;
             return csb.ToString();
         }
+        public IMessageConsumer CreateMessageConsumer(string queueName)
+        {
+            if (string.IsNullOrWhiteSpace(CurrentServer)) throw new InvalidOperationException(ERROR_SERVER_IS_NOT_DEFINED);
+
+            Guid brokerId = SqlScripts.ExecuteScalar<Guid>(ConnectionString, SqlScripts.SelectServiceBrokerIdentifierScript());
+            string queueFullName = SqlScripts.CreateQueueName(brokerId, queueName);
+            return new MessageConsumer(CurrentServer, queueFullName);
+        }
         public string ReceiveMessage(string queueFullName)
         {
             if (string.IsNullOrWhiteSpace(CurrentServer)) throw new InvalidOperationException(ERROR_SERVER_IS_NOT_DEFINED);
@@ -141,6 +149,7 @@ namespace OneCSharp.Messaging
         public void CreateTopic()
         {
             // TODO
+            throw new NotImplementedException();
         }
     }
 }
