@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="1.1.3" />
-    <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="160.2004021.0" />
   </ItemGroup>
 
 </Project>

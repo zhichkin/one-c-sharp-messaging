@@ -5,6 +5,8 @@ SELECT * FROM sys.tcp_endpoints AS i
 INNER JOIN sys.service_broker_endpoints AS e
 ON i.endpoint_id = e.endpoint_id;
 
+SELECT * FROM sys.service_message_types;
+
 SELECT * FROM sys.database_principals;
 
 SELECT * FROM sys.routes;

@@ -13,6 +13,7 @@ namespace OneCSharp.Messaging
         void SetupServiceBroker();
         void CreatePublicEndpoint(string name, int port);
         void CreateQueue(string name);
+        void SendMessage(string routeName, string payload);
     }
     public sealed class MessagingService : IMessagingService
     {
