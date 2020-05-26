@@ -16,3 +16,7 @@ SELECT * FROM sys.conversation_endpoints;
 
 --SELECT * FROM [dbo].[7d027278-6734-48c3-814e-180f0892dd00/Queue/TargetQueue]
 --SELECT service_name, CAST(message_body AS nvarchar(max)) FROM [dbo].[7d027278-6734-48c3-814e-180f0892dd00/Queue/TargetQueue]
+
+SELECT * FROM sys.service_queues
+SELECT * FROM sys.service_queue_usages
+SELECT * FROM sys.conversation_endpoints
