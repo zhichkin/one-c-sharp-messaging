@@ -206,6 +206,30 @@ BEGIN
 END;
 GO
 
+-- ====================================================
+-- Create function to check if queue exists and enabled
+-- ====================================================
+IF OBJECT_ID('dbo.fn_queue_exists', 'FN') IS NOT NULL
+BEGIN
+	DROP FUNCTION [dbo].[fn_queue_exists];
+END;
+GO
+
+CREATE FUNCTION [dbo].[fn_queue_exists](@name nvarchar(128))
+RETURNS int
+AS
+BEGIN
+	DECLARE @enabled bit;
+
+	SELECT @enabled = is_enqueue_enabled FROM sys.service_queues WHERE name = @name;
+
+	IF (@enabled IS NULL) RETURN 1;
+	ELSE IF (@enabled = 0x01) RETURN 0;
+	
+	RETURN 2; -- exists disabled
+END;
+GO
+
 -- ===========================================
 -- Create procedure to get local dialog handle
 -- ===========================================
