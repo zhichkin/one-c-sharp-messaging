@@ -1,0 +1,118 @@
+Stream=Новый COMОбъект("ADODB.Stream");
+Stream.Type=1;
+Stream.Open();
+Connection=Новый COMОбъект("ADODB.Connection");
+Connection.Open("Provider=SQLOLEDB.1; Data Source=NEXTGEN; Initial Catalog=MyBase; User ID=sa;");
+RecordSet=Новый COMОбъект("ADODB.Recordset");
+RecordSet.CursorLocation=3;
+RecordSet.LockType=2;
+
+Запрос="Select data from dbo.MyTable";
+RecordSet.Open(Запрос, Connection);
+RecordSet.MoveFirst();
+Stream.Write(RecordSet.Fields("Data").Value);
+Stream.SaveToFile("c:\БылЗвонокВост.bmp");
+Stream.Close();
+
+Функция ОтправитьФайлНаСервер(ИмяФайла)
+
+	ТекстСкрипта = "
+	|Function SaveToSQL
+	|On Error Resume Next
+    |Set Stream=CreateObject(""ADODB.Stream"")
+    |Stream.Type=1
+    |Stream.Open()
+    |Stream.LoadFromFile(""" + ИмяФайла + """)
+    |Set Connection=CreateObject(""ADODB.Connection"")
+    |Connection.Open(""Provider=SQLOLEDB.1;Password=" + СокрЛП(Pwd) + ";Persist Security Info=False;User ID=" + СокрЛП(Uid) +
+				";Initial Catalog=" + СокрЛП(Database) + ";Data Source=" + СокрЛП(Server) + """)
+    |Set RecordSet=CreateObject(""ADODB.Recordset"")
+    |RecordSet.CursorLocation=3
+    |RecordSet.LockType=2
+    |qvery =""Select * from dbo.DataFails WHERE UserID = " + Число(ИДПольз) + """
+    |RecordSet.Open qvery, Connection
+    |If RecordSet.RecordCount=0 Then
+    |    RecordSet.AddNew()
+    |Else
+    |    RecordSet.MoveFirst()
+    |End If
+    |RecordSet.Fields(""Fail"").Value=Stream.Read()
+    |RecordSet.Fields(""UserID"").Value=" + Число(ИДПольз) + "
+    |RecordSet.Update()
+    |Stream.Close()
+	|If Err.Number <> 0 Then
+	|	SaveToSQL = 0
+	|	Err.Clear
+	|Else
+	|	SaveToSQL = 1
+	|End If
+	|
+	|End Function
+	|";
+
+	VBS=СоздатьОбъект("MSScriptControl.ScriptControl");
+	VBS.Language="vbscript";
+	VBS.Timeout=-1;
+	VBS.AddCode(ТекстСкрипта);
+	Рез = VBS.Run("SaveToSQL");
+
+	Возврат Рез;
+
+КонецФункции //  
+
+
+Функция ПолучитьФайлССервера(ИмяФайла)
+
+
+	Если Прав(КаталогИБ(),1) = "\" Тогда
+		мКаталогИБ = КаталогИБ();
+	Иначе
+		мКаталогИБ = КаталогИБ() + "\";
+	КонецЕсли;
+
+	Если ФС.СуществуетФайл(мКаталогИБ + "Obmen") = 0 Тогда
+		ФС.СоздатьКаталог(мКаталогИБ + "Obmen");
+	КонецЕсли;
+
+	КаталогОбмена = мКаталогИБ + "Obmen\";
+	ПолноеИмяФайла = КаталогОбмена + Строка(ИДПольз) + ИмяФайла;
+
+	Если ФС.СуществуетФайл(ПолноеИмяФайла) <> 0 Тогда
+		ФС.УдалитьФайл(ПолноеИмяФайла);
+	КонецЕсли;
+
+	ТекстСкрипта = "
+	|Function LoadFromSQL
+	|On Error Resume Next
+    |Set Stream=CreateObject(""ADODB.Stream"")
+    |Stream.Type=1
+    |Stream.Open()
+    |Set Connection=CreateObject(""ADODB.Connection"")
+    |Connection.Open(""Provider=SQLOLEDB.1;Password=" + СокрЛП(Pwd) + ";Persist Security Info=False;User ID=" + СокрЛП(Uid) +
+				";Initial Catalog=" + СокрЛП(Database) + ";Data Source=" + СокрЛП(Server) + """)
+    |Set RecordSet=CreateObject(""ADODB.Recordset"")
+    |Qvery =""Select * from dbo.DataFails WHERE UserID = " + Число(ИДПольз) + """
+	|RecordSet.Open Qvery, Connection
+    |RecordSet.MoveFirst()
+    |Stream.Write(RecordSet.Fields(""Fail"").Value)
+    |Stream.SaveToFile(""" + ПолноеИмяФайла + """)
+	|Stream.Close()
+	|If Err.Number <> 0 Then
+	|	LoadFromSQL = 0
+	|	Err.Clear
+	|Else
+	|	LoadFromSQL = """ + ПолноеИмяФайла + """
+	|End If
+	|
+	|End Function
+	|";
+
+	VBS=СоздатьОбъект("MSScriptControl.ScriptControl");
+	VBS.Language="vbscript";
+	VBS.Timeout=-1;
+	VBS.AddCode(ТекстСкрипта);
+	Рез = VBS.Run("LoadFromSQL");
+
+	Возврат Рез;
+
+КонецФункции // ПолучитьФайлССервера 
