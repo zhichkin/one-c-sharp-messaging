@@ -14,8 +14,8 @@ SELECT * FROM sys.remote_service_bindings;
 SELECT * FROM sys.transmission_queue;
 SELECT * FROM sys.conversation_endpoints;
 
---SELECT * FROM [dbo].[7d027278-6734-48c3-814e-180f0892dd00/Queue/TargetQueue]
---SELECT service_name, CAST(message_body AS nvarchar(max)) FROM [dbo].[7d027278-6734-48c3-814e-180f0892dd00/Queue/TargetQueue]
+--SELECT * FROM [dbo].[7437A48F-E4B0-4107-BDE4-BE1B47B3CA5F/queue/default];
+--SELECT service_name, CAST(message_body AS nvarchar(max)) FROM [dbo].[7437A48F-E4B0-4107-BDE4-BE1B47B3CA5F/queue/default];
 
 SELECT * FROM sys.service_queues
 SELECT * FROM sys.service_queue_usages

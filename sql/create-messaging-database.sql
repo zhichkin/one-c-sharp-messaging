@@ -4,21 +4,21 @@ GO
 -- =========================
 -- Create messaging database
 -- =========================
-IF (DB_ID('one-c-sharp-messaging') IS NULL)
+IF (DB_ID('one-c-sharp-service-broker') IS NULL)
 BEGIN
-	CREATE DATABASE [one-c-sharp-messaging];
+	CREATE DATABASE [one-c-sharp-service-broker];
 END;
 GO
 
-USE [one-c-sharp-messaging];
+USE [one-c-sharp-service-broker];
 GO
 
 -- ================================================
 -- Enable service broker for the messaging database
 -- ================================================
-IF NOT EXISTS(SELECT 1 FROM sys.databases WHERE database_id = DB_ID('one-c-sharp-messaging') AND is_broker_enabled = 0x01)
+IF NOT EXISTS(SELECT 1 FROM sys.databases WHERE database_id = DB_ID('one-c-sharp-service-broker') AND is_broker_enabled = 0x01)
 BEGIN
-	ALTER DATABASE [one-c-sharp-messaging] SET ENABLE_BROKER;
+	ALTER DATABASE [one-c-sharp-service-broker] SET ENABLE_BROKER;
 END;
 GO
 
@@ -36,7 +36,7 @@ RETURNS uniqueidentifier
 AS
 BEGIN
 	DECLARE @broker_guid uniqueidentifier = CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier);
-	SELECT @broker_guid = service_broker_guid FROM sys.databases WHERE database_id = DB_ID('one-c-sharp-messaging');
+	SELECT @broker_guid = service_broker_guid FROM sys.databases WHERE database_id = DB_ID('one-c-sharp-service-broker');
 	RETURN @broker_guid;
 END;
 GO
