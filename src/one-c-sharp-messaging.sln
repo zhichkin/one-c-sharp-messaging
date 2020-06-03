@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "messaging", "messaging\mess
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "tests", "tests\tests.csproj", "{A0F1CE08-7D64-443C-A094-BB182233A321}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "update-1c-from-zip", "update-1c-from-zip\update-1c-from-zip.csproj", "{6E76D221-8279-4441-B8D1-E8DA85F31B94}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,6 +33,14 @@ Global
 		{A0F1CE08-7D64-443C-A094-BB182233A321}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A0F1CE08-7D64-443C-A094-BB182233A321}.Release|x86.ActiveCfg = Release|Any CPU
 		{A0F1CE08-7D64-443C-A094-BB182233A321}.Release|x86.Build.0 = Release|Any CPU
+		{6E76D221-8279-4441-B8D1-E8DA85F31B94}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E76D221-8279-4441-B8D1-E8DA85F31B94}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E76D221-8279-4441-B8D1-E8DA85F31B94}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6E76D221-8279-4441-B8D1-E8DA85F31B94}.Debug|x86.Build.0 = Debug|Any CPU
+		{6E76D221-8279-4441-B8D1-E8DA85F31B94}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E76D221-8279-4441-B8D1-E8DA85F31B94}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E76D221-8279-4441-B8D1-E8DA85F31B94}.Release|x86.ActiveCfg = Release|Any CPU
+		{6E76D221-8279-4441-B8D1-E8DA85F31B94}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
