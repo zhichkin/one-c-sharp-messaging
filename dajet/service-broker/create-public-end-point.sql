@@ -5,7 +5,7 @@ IF NOT EXISTS(SELECT 1 FROM sys.symmetric_keys WHERE [name] = '##MS_DatabaseMast
 BEGIN
 	CREATE MASTER KEY ENCRYPTION BY PASSWORD = 'DaJet_(c)_2020_MasterKey';
 END;
-GO -- batch separator
+GO
 
 IF NOT EXISTS(SELECT 1 FROM sys.certificates WHERE [name] = 'DaJetTransportAuthenticationCertificate')
 BEGIN
@@ -15,7 +15,7 @@ BEGIN
 	START_DATE = '20200101',
 	EXPIRY_DATE = '20300101'
 END;
-GO -- batch separator
+GO
 
 IF NOT EXISTS(SELECT 1 FROM sys.service_broker_endpoints WHERE [type] = 3) -- Service Broker endpoint type
 BEGIN
@@ -31,4 +31,4 @@ BEGIN
 	)
 	GRANT CONNECT ON ENDPOINT::ServiceBrokerEndpoint TO [PUBLIC];
 END;
-GO -- batch separator
+GO
