@@ -406,9 +406,9 @@ GO
 EXEC [dbo].[sp_create_queue] N'default';
 GO
 
--- =================================
--- Create procedure to send messages
--- =================================
+-- ========================================
+-- Create procedure to send binary messages
+-- ========================================
 IF OBJECT_ID('dbo.sp_send_message', 'P') IS NOT NULL
 BEGIN
 	DROP PROCEDURE [dbo].[sp_send_message];
@@ -416,6 +416,62 @@ END;
 GO
 
 CREATE PROCEDURE [dbo].[sp_send_message]
+	@dialog_handle uniqueidentifier,
+	@message_body varbinary(max),
+	@message_type nvarchar(128) = NULL
+AS
+BEGIN
+	SET NOCOUNT ON;
+	
+	IF (@message_type IS NULL)
+	BEGIN
+		SET @message_type = N'DEFAULT';
+	END;
+
+	SEND ON CONVERSATION @dialog_handle MESSAGE TYPE @message_type (@message_body);
+
+    RETURN 0;
+END
+GO
+
+-- ==========================================================================
+-- Create procedure to send UTF-8 messages - single-byte-character set (SBCS)
+-- ==========================================================================
+IF OBJECT_ID('dbo.sp_send_message_sbcs', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_send_message_sbcs];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_send_message_sbcs]
+	@dialog_handle uniqueidentifier,
+	@message_body varchar(max),
+	@message_type nvarchar(128) = NULL
+AS
+BEGIN
+	SET NOCOUNT ON;
+	
+	IF (@message_type IS NULL)
+	BEGIN
+		SET @message_type = N'DEFAULT';
+	END;
+
+	SEND ON CONVERSATION @dialog_handle MESSAGE TYPE @message_type (CAST(@message_body AS varbinary(max)));
+
+    RETURN 0;
+END
+GO
+
+-- =========================================================================
+-- Create procedure to send UTF-16 messages - multibyte-character set (MBCS)
+-- =========================================================================
+IF OBJECT_ID('dbo.sp_send_message_mbcs', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_send_message_mbcs];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_send_message_mbcs]
 	@dialog_handle uniqueidentifier,
 	@message_body nvarchar(max),
 	@message_type nvarchar(128) = NULL
@@ -434,9 +490,9 @@ BEGIN
 END
 GO
 
--- =======================================
--- Create procedure to receive one message
--- =======================================
+-- ==============================================
+-- Create procedure to receive one binary message
+-- ==============================================
 IF OBJECT_ID('dbo.sp_receive_message', 'P') IS NOT NULL
 BEGIN
 	DROP PROCEDURE [dbo].[sp_receive_message];
@@ -444,6 +500,116 @@ END;
 GO
 
 CREATE PROCEDURE [dbo].[sp_receive_message]
+	@queue nvarchar(128),
+	@timeout int = 1000
+AS
+BEGIN
+	SET NOCOUNT ON;
+	
+	DECLARE @handle uniqueidentifier;
+	DECLARE @message_type nvarchar(128);
+	DECLARE @message_body varbinary(max);
+
+	DECLARE @sql nvarchar(1024) = N'WAITFOR (RECEIVE TOP (1)
+		@handle_out = conversation_handle,
+		@message_type_out = message_type_name,
+		@message_body_out = message_body
+		FROM [dbo].[' + @queue + ']
+	), TIMEOUT @timeout;';
+
+	EXECUTE sp_executesql @sql,
+		N'@handle_out uniqueidentifier OUTPUT, @message_type_out nvarchar(128) OUTPUT,
+		  @message_body_out varbinary(max) OUTPUT, @timeout int',
+		  @handle_out       = @handle       OUTPUT,
+		  @message_type_out = @message_type OUTPUT,
+		  @message_body_out = @message_body OUTPUT,
+		  @timeout          = @timeout;
+
+	IF (@@ROWCOUNT = 0)
+	BEGIN
+		SELECT CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier) AS [dialog_handle],
+			N''  AS [message_type],
+			0x00 AS [message_body];
+		RETURN 0;
+	END
+
+	IF (@message_type = N'http://schemas.microsoft.com/SQL/ServiceBroker/Error' OR
+        @message_type = N'http://schemas.microsoft.com/SQL/ServiceBroker/EndDialog')
+	BEGIN
+		END CONVERSATION @handle;
+	END
+
+	SELECT @handle AS [dialog_handle], @message_type AS [message_type], @message_body AS [message_body];
+
+    RETURN 0;
+END
+GO
+
+-- ================================================================================
+-- Create procedure to receive one UTF-8 message - single-byte-character set (SBCS)
+-- ================================================================================
+IF OBJECT_ID('dbo.sp_receive_message_sbcs', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_receive_message_sbcs];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_receive_message_sbcs]
+	@queue nvarchar(128),
+	@timeout int = 1000
+AS
+BEGIN
+	SET NOCOUNT ON;
+	
+	DECLARE @handle uniqueidentifier;
+	DECLARE @message_type nvarchar(128);
+	DECLARE @message_body varchar(max);
+
+	DECLARE @sql nvarchar(1024) = N'WAITFOR (RECEIVE TOP (1)
+		@handle_out = conversation_handle,
+		@message_type_out = message_type_name,
+		@message_body_out = CAST(message_body AS varchar(max))
+		FROM [dbo].[' + @queue + ']
+	), TIMEOUT @timeout;';
+
+	EXECUTE sp_executesql @sql,
+		N'@handle_out uniqueidentifier OUTPUT, @message_type_out nvarchar(128) OUTPUT,
+		  @message_body_out varchar(max) OUTPUT, @timeout int',
+		  @handle_out       = @handle       OUTPUT,
+		  @message_type_out = @message_type OUTPUT,
+		  @message_body_out = @message_body OUTPUT,
+		  @timeout          = @timeout;
+
+	IF (@@ROWCOUNT = 0)
+	BEGIN
+		SELECT CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier) AS [dialog_handle],
+				N'' AS [message_type],
+				 '' AS [message_body];
+		RETURN 0;
+	END
+
+	IF (@message_type = N'http://schemas.microsoft.com/SQL/ServiceBroker/Error' OR
+        @message_type = N'http://schemas.microsoft.com/SQL/ServiceBroker/EndDialog')
+	BEGIN
+		END CONVERSATION @handle;
+	END
+
+	SELECT @handle AS [dialog_handle], @message_type AS [message_type], @message_body AS [message_body];
+
+    RETURN 0;
+END
+GO
+
+-- ===============================================================================
+-- Create procedure to receive one UTF-16 message - multibyte-character set (MBCS)
+-- ===============================================================================
+IF OBJECT_ID('dbo.sp_receive_message_mbcs', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_receive_message_mbcs];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_receive_message_mbcs]
 	@queue nvarchar(128),
 	@timeout int = 1000
 AS
@@ -489,9 +655,9 @@ BEGIN
 END
 GO
 
--- =============================================
--- Create procedure to receive multiple messages
--- =============================================
+-- ====================================================
+-- Create procedure to receive multiple binary messages
+-- ====================================================
 IF OBJECT_ID('dbo.sp_receive_messages', 'P') IS NOT NULL
 BEGIN
 	DROP PROCEDURE [dbo].[sp_receive_messages];
@@ -506,17 +672,88 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 
+	DECLARE @row_count int = 0;
+
+	DECLARE @sql nvarchar(1024) = N'WAITFOR (RECEIVE TOP (@number_of_messages)
+		conversation_handle AS [dialog_handle],
+		message_type_name   AS [message_type],
+		message_body        AS [message_body]
+		FROM [dbo].[' + @queue + ']
+	), TIMEOUT @timeout;
+	SET @row_count_out = @@ROWCOUNT;';
+
+	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int',
+		  @number_of_messages = @number_of_messages, @timeout = @timeout, @row_count_out = @row_count OUTPUT;
+
+	RETURN @row_count;
+END
+GO
+
+-- =======================================================================================
+-- Create procedure to receive multiple UTF-16 messages - single-byte-character set (SBCS)
+-- =======================================================================================
+IF OBJECT_ID('dbo.sp_receive_messages_sbcs', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_receive_messages_sbcs];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_receive_messages_sbcs]
+	@queue nvarchar(128),
+	@timeout int = 1000,
+	@number_of_messages int = 10
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	DECLARE @row_count int = 0;
+
+	DECLARE @sql nvarchar(1024) = N'WAITFOR (RECEIVE TOP (@number_of_messages)
+		conversation_handle                AS [dialog_handle],
+		message_type_name                  AS [message_type],
+		CAST(message_body AS varchar(max)) AS [message_body]
+		FROM [dbo].[' + @queue + ']
+	), TIMEOUT @timeout;
+	SET @row_count_out = @@ROWCOUNT;';
+
+	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int',
+		  @number_of_messages = @number_of_messages, @timeout = @timeout, @row_count_out = @row_count OUTPUT;
+
+	RETURN @row_count;
+END
+GO
+
+-- =====================================================================================
+-- Create procedure to receive multiple UTF-16 messages - multibyte-character set (MBCS)
+-- =====================================================================================
+IF OBJECT_ID('dbo.sp_receive_messages_mbcs', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_receive_messages_mbcs];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_receive_messages_mbcs]
+	@queue nvarchar(128),
+	@timeout int = 1000,
+	@number_of_messages int = 10
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	DECLARE @row_count int = 0;
+
 	DECLARE @sql nvarchar(1024) = N'WAITFOR (RECEIVE TOP (@number_of_messages)
 		conversation_handle                 AS [dialog_handle],
 		message_type_name                   AS [message_type],
 		CAST(message_body AS nvarchar(max)) AS [message_body]
 		FROM [dbo].[' + @queue + ']
-	), TIMEOUT @timeout;';
+	), TIMEOUT @timeout;
+	SET @row_count_out = @@ROWCOUNT;';
 
-	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int',
-		  @number_of_messages = @number_of_messages, @timeout = @timeout;
+	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int',
+		  @number_of_messages = @number_of_messages, @timeout = @timeout, @row_count_out = @row_count OUTPUT;
 
-	RETURN 0;
+	RETURN @row_count;
 END
 GO
 
