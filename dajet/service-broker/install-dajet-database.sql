@@ -4,21 +4,21 @@ GO
 -- =========================
 -- Create messaging database
 -- =========================
-IF (DB_ID('one-c-sharp-service-broker') IS NULL)
+IF (DB_ID('dajet-mq') IS NULL)
 BEGIN
-	CREATE DATABASE [one-c-sharp-service-broker];
+	CREATE DATABASE [dajet-mq];
 END;
 GO
 
-USE [one-c-sharp-service-broker];
+USE [dajet-mq];
 GO
 
 -- ================================================
 -- Enable service broker for the messaging database
 -- ================================================
-IF NOT EXISTS(SELECT 1 FROM sys.databases WHERE database_id = DB_ID('one-c-sharp-service-broker') AND is_broker_enabled = 0x01)
+IF NOT EXISTS(SELECT 1 FROM sys.databases WHERE database_id = DB_ID('dajet-mq') AND is_broker_enabled = 0x01)
 BEGIN
-	ALTER DATABASE [one-c-sharp-service-broker] SET ENABLE_BROKER;
+	ALTER DATABASE [dajet-mq] SET ENABLE_BROKER;
 END;
 GO
 
@@ -36,8 +36,35 @@ RETURNS uniqueidentifier
 AS
 BEGIN
 	DECLARE @broker_guid uniqueidentifier = CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier);
-	SELECT @broker_guid = service_broker_guid FROM sys.databases WHERE database_id = DB_ID('one-c-sharp-service-broker');
+	SELECT @broker_guid = service_broker_guid FROM sys.databases WHERE database_id = DB_ID('dajet-mq');
 	RETURN @broker_guid;
+END;
+GO
+
+-- ===================================================
+-- Create function to get service broker endpoint port
+-- ===================================================
+IF OBJECT_ID('dbo.fn_service_broker_port', 'FN') IS NOT NULL
+BEGIN
+	DROP FUNCTION [dbo].[fn_service_broker_port];
+END;
+GO
+
+CREATE FUNCTION [dbo].[fn_service_broker_port]()
+RETURNS int
+AS
+BEGIN
+	DECLARE @broker_port int;
+	
+	SELECT @broker_port = [tcp].[port]
+	FROM sys.tcp_endpoints AS [tcp]
+	INNER JOIN sys.service_broker_endpoints AS [sbe]
+	ON [sbe].[endpoint_id] = [tcp].[endpoint_id]
+	WHERE [sbe].[type] = 3; -- Service Broker endpoint type
+
+	IF (@broker_port IS NULL) SET @broker_port = 0;
+
+	RETURN @broker_port;
 END;
 GO
 
@@ -171,6 +198,23 @@ BEGIN
 END;
 GO
 
+-- ===========================================
+-- Create function to build default queue name
+-- ===========================================
+IF OBJECT_ID('dbo.fn_default_queue_name', 'FN') IS NOT NULL
+BEGIN
+	DROP FUNCTION [dbo].[fn_default_queue_name];
+END;
+GO
+
+CREATE FUNCTION [dbo].[fn_default_queue_name]()
+RETURNS nvarchar(128)
+AS
+BEGIN
+	RETURN [dbo].[fn_create_queue_name](N'default');
+END;
+GO
+
 -- =====================================
 -- Create function to build service name
 -- =====================================
@@ -268,40 +312,28 @@ BEGIN
 END;
 GO
 
--- ===========================================
--- Create procedure to get local dialog handle
--- ===========================================
-IF OBJECT_ID('dbo.sp_get_local_dialog_handle', 'P') IS NOT NULL
+-- =====================================================
+-- Create function to get dialog handle for target queue
+-- =====================================================
+IF OBJECT_ID('dbo.fn_get_dialog_handle', 'FN') IS NOT NULL
 BEGIN
-	DROP PROCEDURE [dbo].[sp_get_local_dialog_handle];
+	DROP FUNCTION [dbo].[fn_get_dialog_handle];
 END;
 GO
 
-CREATE PROCEDURE [dbo].[sp_get_local_dialog_handle]
-(
-	@handle uniqueidentifier OUTPUT,
-	@target_queue_name nvarchar(128) = NULL
-)
+CREATE FUNCTION [dbo].[fn_get_dialog_handle](@target_queue_name nvarchar(128))
+RETURNS uniqueidentifier
 AS
 BEGIN
-	SET NOCOUNT ON;
-
 	DECLARE @source_broker_guid nvarchar(36) = [dbo].[fn_service_broker_guid]();
 	DECLARE @source_service_name nvarchar(128) = [dbo].[fn_default_service_name]();
 
-	DECLARE @target_broker_guid nvarchar(36);
-	DECLARE @target_service_name nvarchar(128);
+	IF (@target_queue_name IS NULL) RETURN CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier);
+	
+	DECLARE @target_broker_guid nvarchar(36) = SUBSTRING(@target_queue_name, 1, 36);
+	DECLARE @target_service_name nvarchar(128) = REPLACE(@target_queue_name, N'/queue/', N'/service/');
 
-	IF (@target_queue_name IS NULL)
-	BEGIN
-		SET @target_broker_guid = CAST(@source_broker_guid AS nvarchar(36));
-		SET @target_service_name = @source_service_name;
-	END
-	ELSE
-	BEGIN
-		SET @target_broker_guid = SUBSTRING(@target_queue_name, 1, 36);
-		SET @target_service_name = REPLACE(@target_queue_name, N'/queue/', N'/service/');
-	END
+	DECLARE @handle uniqueidentifier;
 
 	SELECT @handle = conversation_handle
 	FROM sys.conversation_endpoints AS e
@@ -312,9 +344,9 @@ BEGIN
 	AND e.far_service = @target_service_name
 	AND e.far_broker_instance = @target_broker_guid;
 
-	IF (@handle IS NULL) RETURN 1; -- dialog handle is not found error
+	IF (@handle IS NULL) SET @handle = CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier);
 
-	RETURN 0;
+	RETURN @handle;
 END;
 GO
 
@@ -353,20 +385,17 @@ BEGIN
 	-- Create default local dialog
 	-- ===========================
 
-	DECLARE @result int;
-	DECLARE @handle uniqueidentifier;
+	DECLARE @handle uniqueidentifier = [dbo].[fn_get_dialog_handle](@queue_name);
 	DECLARE @broker_guid nvarchar(36) = CAST([dbo].[fn_service_broker_guid]() AS nvarchar(36));
 
-	EXEC @result = [dbo].[sp_get_local_dialog_handle] @handle OUTPUT, @queue_name;
-
-	IF (@result = 1 OR @handle IS NULL) -- dialog handle is not found
-	BEGIN
-		DECLARE @sql nvarchar(1024) = 'BEGIN DIALOG @handle
+	IF (@handle IS NULL OR @handle = CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier))
+	BEGIN  -- dialog handle is not found
+		DECLARE @sql nvarchar(1024) = 'BEGIN DIALOG @handle_out
 		FROM SERVICE [' + @default_service_name + ']
 		TO SERVICE ''' + @service_name + ''', ''' + @broker_guid + '''
 		ON CONTRACT [DEFAULT]
 		WITH ENCRYPTION = OFF;';
-		EXECUTE sp_executesql @sql, N'@handle uniqueidentifier', @handle = @handle;
+		EXECUTE sp_executesql @sql, N'@handle_out uniqueidentifier OUTPUT', @handle_out = @handle OUTPUT;
 	END;
 END;
 GO
@@ -489,3 +518,122 @@ BEGIN
 
 	RETURN 0;
 END
+GO
+
+-- ================================================
+-- Create procedure to create route to remote queue
+-- ================================================
+IF OBJECT_ID('dbo.sp_create_route', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_create_route];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_create_route]
+	@remote_queue_name nvarchar(128),
+	@remote_server_address nvarchar(128),
+	@remote_broker_port_number int
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	DECLARE @sql nvarchar(1024);
+
+	DECLARE @default_service_name nvarchar(128) = [dbo].[fn_default_service_name]();
+	
+	DECLARE @remote_broker_guid nvarchar(128) = SUBSTRING(@remote_queue_name, 1, 36);
+	DECLARE @route_name nvarchar(128) = REPLACE(@remote_queue_name, N'/queue/', N'/route/');
+	DECLARE @remote_user nvarchar(128) = @remote_broker_guid + N'/user';
+	DECLARE @binding_name nvarchar(128) = REPLACE(@remote_queue_name, N'/queue/', N'/binding/');
+	DECLARE @remote_service_name nvarchar(128) = REPLACE(@remote_queue_name, N'/queue/', N'/service/');
+	
+	IF NOT EXISTS(SELECT 1 FROM sys.routes WHERE [name] = @route_name)
+	BEGIN
+		SET @sql = N'CREATE ROUTE [' + @route_name + N'] WITH
+			SERVICE_NAME = ''' + @remote_service_name + N''',
+			ADDRESS = ''TCP://' + @remote_server_address + N':' + CAST(@remote_broker_port_number AS nvarchar(5)) + N'''' + N';';
+		EXEC(@sql);
+	END;
+
+	IF NOT EXISTS(SELECT 1 FROM sys.remote_service_bindings WHERE [name] = @binding_name)
+	BEGIN
+		SET @sql = N'CREATE REMOTE SERVICE BINDING [' + @binding_name + N']
+			TO SERVICE ''' + @remote_service_name + N'''
+			WITH
+			USER = [' + @remote_user + N'],
+			ANONYMOUS = ON;';
+	END;
+
+	DECLARE @handle uniqueidentifier = [dbo].[fn_get_dialog_handle](@remote_queue_name);
+	
+	IF (@handle IS NULL OR @handle = CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier))
+	BEGIN
+		SET @sql = N'BEGIN DIALOG @handle_out
+		FROM SERVICE [' + @default_service_name + N']
+		TO SERVICE ''' + @remote_service_name + N''', ''' + @remote_broker_guid + N'''
+		ON CONTRACT [DEFAULT]
+		WITH ENCRYPTION = OFF;';
+		EXECUTE sp_executesql @sql, N'@handle_out uniqueidentifier OUTPUT', @handle_out = @handle OUTPUT;
+	END;
+
+END;
+GO
+
+-- =====================================================================
+-- Create procedure to create remote user and its certificate public key
+-- =====================================================================
+IF OBJECT_ID('dbo.sp_create_remote_user', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_create_remote_user];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_create_remote_user]
+	@remote_user_name nvarchar(128),
+	@remote_certificate_name nvarchar(128),
+	@remote_certificate_data nvarchar(max)
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	IF (@remote_user_name        IS NULL) THROW 50001, N'Invalid remote user name.', 1;
+	IF (@remote_certificate_name IS NULL) THROW 50002, N'Invalid remote certificate name.', 1;
+	IF (@remote_certificate_data IS NULL) THROW 50003, N'Invalid remote certificate data.', 1;
+
+	IF NOT EXISTS(SELECT 1 FROM sys.database_principals WHERE [name] = @remote_user_name)
+	BEGIN
+		EXEC(N'CREATE USER [' + @remote_user_name + N'] WITHOUT LOGIN;');
+	END;
+
+	IF NOT EXISTS(SELECT 1 FROM sys.certificates WHERE [name] = @remote_certificate_name)
+	BEGIN
+		EXEC(N'CREATE CERTIFICATE [' + @remote_certificate_name + N']
+			AUTHORIZATION [' + @remote_user_name + N']
+			FROM BINARY = ' + @remote_certificate_data + N';');
+	END;
+END;
+GO
+
+-- =====================================================
+-- Create function to get default certificate public key
+-- =====================================================
+IF OBJECT_ID('dbo.fn_default_certificate_data', 'FN') IS NOT NULL
+BEGIN
+	DROP FUNCTION [dbo].[fn_default_certificate_data];
+END;
+GO
+
+CREATE FUNCTION [dbo].[fn_default_certificate_data]()
+RETURNS nvarchar(max)
+AS
+BEGIN
+	DECLARE @certificate_name nvarchar(128) = [dbo].[fn_default_certificate_name]();
+	DECLARE @certificate_data nvarchar(max);
+	
+	SELECT @certificate_data = CONVERT(nvarchar(max), CERTENCODED(certificate_id), 1)
+	  FROM sys.certificates
+	  WHERE [name] = @certificate_name;
+
+	RETURN @certificate_data;
+END;
+GO
