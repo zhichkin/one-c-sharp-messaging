@@ -799,6 +799,7 @@ BEGIN
 			WITH
 			USER = [' + @remote_user + N'],
 			ANONYMOUS = ON;';
+		EXEC(@sql);
 	END;
 
 	DECLARE @handle uniqueidentifier = [dbo].[fn_get_dialog_handle](@remote_queue_name);
@@ -861,13 +862,13 @@ END;
 GO
 
 CREATE FUNCTION [dbo].[fn_default_certificate_data]()
-RETURNS nvarchar(max)
+RETURNS nvarchar(4000)
 AS
 BEGIN
 	DECLARE @certificate_name nvarchar(128) = [dbo].[fn_default_certificate_name]();
-	DECLARE @certificate_data nvarchar(max);
+	DECLARE @certificate_data nvarchar(4000);
 	
-	SELECT @certificate_data = CONVERT(nvarchar(max), CERTENCODED(certificate_id), 1)
+	SELECT @certificate_data = CONVERT(nvarchar(4000), CERTENCODED(certificate_id), 1)
 	  FROM sys.certificates
 	  WHERE [name] = @certificate_name;
 
