@@ -15,8 +15,11 @@ SELECT * FROM sys.remote_service_bindings;
 SELECT * FROM sys.transmission_queue;
 SELECT * FROM sys.conversation_endpoints;
 
---SELECT * FROM [dbo].[7437A48F-E4B0-4107-BDE4-BE1B47B3CA5F/queue/default];
---SELECT service_name, CAST(message_body AS nvarchar(max)) FROM [dbo].[7437A48F-E4B0-4107-BDE4-BE1B47B3CA5F/queue/default];
+SELECT service_name,
+CAST(message_body AS varchar(max)) AS [UTF-8],
+CAST(message_body AS nvarchar(max)) AS [UTF-16],
+DATALENGTH(message_body) AS [size]
+FROM [dbo].[06000E2A-06AA-43B8-AE6E-0DDF3F718997/queue/test];
 
 SELECT * FROM sys.services
 SELECT * FROM sys.service_queues

@@ -1,5 +1,5 @@
 USE [master];
-GO -- batch separator
+GO
 
 IF NOT EXISTS(SELECT 1 FROM sys.symmetric_keys WHERE [name] = '##MS_DatabaseMasterKey##')
 BEGIN

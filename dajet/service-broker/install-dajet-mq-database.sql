@@ -682,7 +682,7 @@ BEGIN
 	), TIMEOUT @timeout;
 	SET @row_count_out = @@ROWCOUNT;';
 
-	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int',
+	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int OUTPUT',
 		  @number_of_messages = @number_of_messages, @timeout = @timeout, @row_count_out = @row_count OUTPUT;
 
 	RETURN @row_count;
@@ -716,7 +716,7 @@ BEGIN
 	), TIMEOUT @timeout;
 	SET @row_count_out = @@ROWCOUNT;';
 
-	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int',
+	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int OUTPUT',
 		  @number_of_messages = @number_of_messages, @timeout = @timeout, @row_count_out = @row_count OUTPUT;
 
 	RETURN @row_count;
@@ -750,7 +750,7 @@ BEGIN
 	), TIMEOUT @timeout;
 	SET @row_count_out = @@ROWCOUNT;';
 
-	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int',
+	EXECUTE sp_executesql @sql, N'@number_of_messages int, @timeout int, @row_count_out int OUTPUT',
 		  @number_of_messages = @number_of_messages, @timeout = @timeout, @row_count_out = @row_count OUTPUT;
 
 	RETURN @row_count;
