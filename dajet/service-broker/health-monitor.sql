@@ -15,11 +15,11 @@ SELECT * FROM sys.remote_service_bindings;
 SELECT * FROM sys.transmission_queue;
 SELECT * FROM sys.conversation_endpoints;
 
-SELECT service_name,
-CAST(message_body AS varchar(max)) AS [UTF-8],
-CAST(message_body AS nvarchar(max)) AS [UTF-16],
-DATALENGTH(message_body) AS [size]
-FROM [dbo].[06000E2A-06AA-43B8-AE6E-0DDF3F718997/queue/test];
+SELECT
+--REPLACE(service_name, N'/service/', N'/queue/') AS [Queue],
+CAST(SUBSTRING(message_body, 1, 128) AS varchar(max)) AS [UTF-8],
+DATALENGTH(message_body) AS [Size]
+FROM [dbo].[514B05BB-CD37-4D17-828C-AFFB5161380B/queue/test];
 
 SELECT * FROM sys.services
 SELECT * FROM sys.service_queues

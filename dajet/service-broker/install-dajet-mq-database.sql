@@ -274,6 +274,83 @@ BEGIN
 END;
 GO
 
+-- =========================================
+-- Create procedure to get local queues list
+-- =========================================
+IF OBJECT_ID('dbo.sp_select_local_queue_list', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_select_local_queue_list];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_select_local_queue_list]
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	DECLARE @default_queue_name nvarchar(128) = [dbo].[fn_default_queue_name]();
+
+	SELECT
+		[name],
+		[object_id],
+		CAST([is_enqueue_enabled] AS int) AS [enabled]
+	FROM
+		sys.service_queues
+	WHERE
+		[name] != @default_queue_name AND [is_ms_shipped] = 0;
+END;
+GO
+
+-- =====================================================
+-- Create procedure to get outbound (remote) queues list
+-- =====================================================
+IF OBJECT_ID('dbo.sp_select_remote_queue_list', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_select_remote_queue_list];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_select_remote_queue_list]
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	SELECT
+		REPLACE([remote_service_name], N'/service/', N'/queue/') AS [name],
+		[broker_instance] AS [broker_guid],
+		[address]
+	FROM
+		sys.routes
+	WHERE
+		[remote_service_name] IS NOT NULL AND NOT [remote_service_name] LIKE N'%/default';
+END;
+GO
+
+-- =================================================
+-- Create procedure to get local queue current state
+-- =================================================
+IF OBJECT_ID('dbo.sp_select_queue_state', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_select_queue_state];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_select_queue_state]
+	@queue nvarchar(128)
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	DECLARE @queue_table nvarchar(136) = N'[dbo].[' + @queue + N']';
+
+	EXEC(N'SELECT
+		COUNT(*) AS [Count],
+		ISNULL(SUM(DATALENGTH(message_body)), 0) AS [Size]
+	FROM
+		' + @queue_table + N' WITH(NOLOCK);');
+END;
+GO
+
 -- ================================
 -- Create procedure to delete queue
 -- ================================
@@ -776,6 +853,7 @@ BEGIN
 
 	DECLARE @sql nvarchar(1024);
 
+	DECLARE @local_broker_guid nvarchar(36) = CAST([dbo].[fn_service_broker_guid]() AS nvarchar(36));
 	DECLARE @default_service_name nvarchar(128) = [dbo].[fn_default_service_name]();
 	
 	DECLARE @remote_broker_guid nvarchar(128) = SUBSTRING(@remote_queue_name, 1, 36);
@@ -784,10 +862,13 @@ BEGIN
 	DECLARE @binding_name nvarchar(128) = REPLACE(@remote_queue_name, N'/queue/', N'/binding/');
 	DECLARE @remote_service_name nvarchar(128) = REPLACE(@remote_queue_name, N'/queue/', N'/service/');
 	
+	IF (@local_broker_guid = @remote_broker_guid) THROW 50001, N'Invalid operation: there is no meaning to create route to the local queue.', 1;
+
 	IF NOT EXISTS(SELECT 1 FROM sys.routes WHERE [name] = @route_name)
 	BEGIN
 		SET @sql = N'CREATE ROUTE [' + @route_name + N'] WITH
 			SERVICE_NAME = ''' + @remote_service_name + N''',
+			BROKER_INSTANCE = ''' + @remote_broker_guid + ''',
 			ADDRESS = ''TCP://' + @remote_server_address + N':' + CAST(@remote_broker_port_number AS nvarchar(5)) + N'''' + N';';
 		EXEC(@sql);
 	END;
