@@ -341,13 +341,30 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 
-	DECLARE @queue_table nvarchar(136) = N'[dbo].[' + @queue + N']';
+	DECLARE @local_broker_guid nvarchar(36) = CAST([dbo].[fn_service_broker_guid]() AS nvarchar(36));
+	DECLARE @queue_broker_guid nvarchar(36) = SUBSTRING(@queue, 1, 36);
 
-	EXEC(N'SELECT
-		COUNT(*) AS [Count],
-		ISNULL(SUM(DATALENGTH(message_body)), 0) AS [Size]
-	FROM
-		' + @queue_table + N' WITH(NOLOCK);');
+	IF (@local_broker_guid = @queue_broker_guid)
+	BEGIN -- local queue
+		
+		DECLARE @queue_table nvarchar(136) = N'[dbo].[' + @queue + N']';
+
+		EXEC(N'SELECT COUNT(*) AS [Count], ISNULL(SUM(DATALENGTH(message_body)), 0) AS [Size]
+		FROM' + @queue_table + N' WITH(NOLOCK);');
+
+	END;
+	ELSE
+	BEGIN
+		
+		DECLARE @service_name nvarchar(128) = REPLACE(@queue, N'/queue/', N'/service/');
+
+		SELECT
+			COUNT(*) AS [Count],
+			ISNULL(SUM(DATALENGTH(message_body)), 0) AS [Size]
+		FROM sys.transmission_queue
+		WHERE to_service_name = @service_name;
+
+	END;
 END;
 GO
 
@@ -379,6 +396,12 @@ BEGIN
 	IF EXISTS(SELECT 1 FROM sys.service_queues WHERE name = @queue_name)
 	BEGIN
 		EXEC(N'DROP QUEUE [dbo].[' + @queue_name + N'];');
+	END;
+
+	DECLARE @handle uniqueidentifier = [dbo].[fn_get_dialog_handle](@queue_name);
+	IF (@handle IS NOT NULL AND @handle != CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier))
+	BEGIN
+		END CONVERSATION @handle;
 	END;
 
 	-- ==============================================
@@ -954,5 +977,48 @@ BEGIN
 	  WHERE [name] = @certificate_name;
 
 	RETURN @certificate_data;
+END;
+GO
+
+-- ====================================================
+-- Create procedure to delete route to the remote queue
+-- ====================================================
+IF OBJECT_ID('dbo.sp_delete_route', 'P') IS NOT NULL
+BEGIN
+	DROP PROCEDURE [dbo].[sp_delete_route];
+END;
+GO
+
+CREATE PROCEDURE [dbo].[sp_delete_route]
+	@remote_queue_name nvarchar(128)
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	DECLARE @handle uniqueidentifier = [dbo].[fn_get_dialog_handle](@remote_queue_name);
+
+	IF (@handle IS NULL OR @handle = CAST('00000000-0000-0000-0000-000000000000' AS uniqueidentifier))
+	BEGIN
+		END CONVERSATION @handle; -- WITH CLEANUP;
+	END;
+
+	WAITFOR DELAY '00:00:10'; -- wait for 10 seconds - let service broker to send end dialog message
+
+	DECLARE @sql nvarchar(1024);
+
+	DECLARE @route_name nvarchar(128) = REPLACE(@remote_queue_name, N'/queue/', N'/route/');
+	DECLARE @binding_name nvarchar(128) = REPLACE(@remote_queue_name, N'/queue/', N'/binding/');
+
+	IF EXISTS(SELECT 1 FROM sys.remote_service_bindings WHERE [name] = @binding_name)
+	BEGIN
+		SET @sql = N'DROP REMOTE SERVICE BINDING [' + @binding_name + N'];';
+		EXECUTE(@sql);
+	END;
+
+	IF EXISTS(SELECT 1 FROM sys.routes WHERE [name] = @route_name)
+	BEGIN
+		SET @sql = N'DROP ROUTE [' + @route_name + N'];';
+		EXECUTE(@sql);
+	END;
 END;
 GO
